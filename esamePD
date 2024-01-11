@@ -1,0 +1,224 @@
+Risposta a) Client
+
+-EsameStdClient--
+public class EsamiStdClient {
+   public static void main(String[] args){
+      Context ctx = new InitialContext();
+      EsamiEJBRemote ejb = (EsamiEJBRemote) ctx.lookup("java:global/EsameServer/esami/EsamiEJB!esami/EsamiEJBRemote");
+      System.out.println("Studenti che hanno superato gli esami: ");
+      List<Esame> studentiEsamePassato = ejb.cercaStudentiPassati();
+      for(Esame e : studentiEsamePassato)
+         System.out.println(e);
+      Scanner scanner = new Scanner(System.in);
+      System.out.println("Inserire matricola studente: ");
+      String matricola = scanner.getLine();
+      List<Esame> studentePresenze = ejb.cercaPresenzeStudente(matricola);
+      for(Esame e : studentePresenze)
+         System.out.println(e);
+      
+   }
+}
+########################################################
+Risposta a) Server
+
+
+-Esame--
+@Entity
+@NamedQueries({
+   @NamedQuery("cercaTutto", "SELECT e FROM Esame e"),
+   @NamedQuery("cercaId", "SELECT e FROM Esame e WHERE e.id = :id"),
+   @NamedQuery("cercaCognome", "SELECT e FROM Esame e WHERE e.cognome = :cognome"),
+   @NamedQuery("cercaStudentiPassati", "SELECT e FROM Esame e WHERE e.esito = 'A' OR e.esito = 'B' OR e.esito = 'C' OR e.esito = 'D' OR e.esito = 'E' "),
+   @NamedQuery("cercaPresenzeStudente", "SELECT e FROM Esame e WHERE e.matricola = :matricola AND (e.esito = e.esito = 'A' OR e.esito = 'B' OR e.esito = 'C' OR e.esito = 'D' OR e.esito = 'E' OR e.esito = 'voto' OR e.esito = 'bocciato' OR e.esito = 'ritirato')"),
+   @NamedQuery("cercaEsamiNonPassatiStudente", "SELECT e FROM Esame e WHERE e.matricola = :matricola AND (e.esito = e.esito = 'bocciato' OR e.esito = 'ritirato')")
+})
+@XmlRootElement
+public class Esame implements Serializable{
+   @Id
+   private Integer id;
+   private String matricola;
+   private String nome;
+   private String cognome;
+   private Date dataAppello;
+   private Date dataImmissione;
+   private String esito;
+
+   public Esame(){
+   }
+
+   public Esame(Integer id, String matricola, String nome, String cognome, Date dataAppello, Date dataImmissione, String esito){
+      this.id = id;
+      this.matricola = matricola;
+      this.nome = nome;
+      this.cognome = cognome;
+      this.dataAppello = dataAppello;
+      this.dataImmissione = dataImmissione;
+      this.esito = esito;
+   }
+
+   //getter e setter
+   
+}
+
+-DatabaseProducer--
+@Produce
+@PersistenceContext(unitName="esamePU")
+public class DatabaseProducer{
+   @Inject EntityManager em;
+}
+
+-DatabasePopulator--
+@Singleton
+@LocalBean
+@Startup
+@DataSourceDefinition(name="java:global/jdbc/EsameDS", dataBase="EsameBD", ...)
+public class DatabasePopulator{
+   @Inject 
+   private EsameEJB ejb;
+   private Esame e1,e2,e3,e4;
+   
+   public void populateDB(){
+      e1 = new Esame(1, "000 007", "Sofia", "Rossi", new Date(1, 11, 2024), new Date(), "assente");
+      e2 = new Esame(2, "000 008", "Tommaso", "Ferrari", new Date(1, 11, 2024), new Date(), "bocciato");
+      e3 = new Esame(3, "000 009", "Vittoria", "Romano", new Date(1, 11, 2024), new Date(), "C");
+      e4 = new Esame(4, "000 007", "Sofia", "Rossi", new Date(1, 11, 2024), new Date(), "A");
+     
+      ejb.aggiungiEsame(e1);
+      ejb.aggiungiEsame(e2);
+      ejb.aggiungiEsame(e3);
+      ejb.aggiungiEsame(e4);
+   }
+
+   public void clear(){
+      ejb.rimuoviEsame(e1);
+      ejb.rimuoviEsame(e2);
+      ejb.rimuoviEsame(e3);
+      ejb.rimuoviEsame(e4);
+
+   }
+}
+
+-EsameEJBRemote
+@Remote
+public interface EsameEJBRemote{
+   public void aggiungiEsame(Esame e);
+   public void rimuoviEsame(Esame e);
+   public void aggiornaEsame(Esame e);
+   public Esame cercaId(Integer id);
+   public List<Esame> cercaTutto();
+   public List<Esame> cercaCognome(String cognome);
+   public List<Esame> cercaStudentiPassati();
+   public List<Esame> cercaPresenzeStudente(String matricola);
+   public List<Esame> cercaEsamiNonPassatiStudente(String matricola);
+}
+
+-EsameEJB--
+@Stateless
+@LocalBean
+@WebService
+public class EsameEJB {
+   @Inject EntityManager em;
+
+   public void aggiungiEsame(Esame e){
+      em.persist(e);
+   }
+   public void rimuoviEsame(Esame e){
+      em.remove(em.merge(e));
+   }
+   public void aggiornaEsame(Esame e){
+      em.merge(e);
+   }
+   public Esame cercaId(Integer id){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaId", Esame.class);
+      query.setParameter("id", id);
+      return query.getSingleResult();
+   }
+   public List<Esame> cercaTutto(){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaTutto", Esame.class);
+      return query.getResultList();
+   }
+   public List<Esame> cercaCognome(String cognome){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaCognome", Esame.class);
+      query.setParameter("cognome", cognome);
+      return query.getResultList();
+   }
+   public List<Esame> cercaStudentiPassati(){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaStudentiPassati", Esame.class);
+      return query.getResultList();
+   }
+   public List<Esame> cercaPresenzeStudente(String matricola){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaPresenzeStudente", Esame.class);
+      query.setParameter("matricola", matricola);
+      return query.getResultList();
+   }
+   public List<Esame> cercaEsamiNonPassatiStudente(String matricola){
+      TypedQuery<Esame> query = em.createNamedQuery("cercaEsamiNonPassatiStudente", Esame.class);
+      query.setParameter("matricola", matricola);
+      return query.getResultList();
+   }
+}
+
+########################################################
+Risposta b) Client
+
+-EsameMessageProducer--
+public class EsameMessageProducer{
+   public static void main(String[] args){
+      Context ctx = new InitialContext();
+
+      ConnectionFactory factory = (ConnectionFactory) ctx.lookup("jms/javaee7/ConnectionFactory");
+      Destination topic = (Destination) ctx.lookup("jms/javaee7/Topic");
+
+      try(JMSContext jms = factory.createContext()){
+         JMSProducer producer = jms.createProducer();
+         Esame e = new Esame(1, "000 004", "Mario", "Rossi", new Date(1, 11, 2024), new Date(), "bocciato");
+         producer.send(topic, e);
+      }
+   }
+}
+########################################################
+Risposta b) Server
+
+-EsameMDB--
+@MessageDriven(name="jms/javaee7/Topic")
+public class EsameMDB implements MessageListener{
+   @Inject EsameEJB ejb;
+   @Inject Event<Esame> event;
+   public void onNotify(Message m){
+      try{
+         Esame e = m.getBody(Esame.class);
+         ejb.aggiungiEsame(e);
+         System.out.println("DATA_INSERIMENTO: Inserimento esame per lo studente " + e.getCognome() + ",esito: " + e.getEsito());
+         List<Esame> esamiNonPassatiStudente = ejb.cercaEsamiNonPassatiStudente(e.matricola);
+         if(esamiNonPassatiStudente != null AND esamiNonPassatiStudente.size() > 0)
+            event.fire(e);
+      }catch(JMSException ex){
+         ex.printStackTrace();
+      }
+   }
+}
+
+-EsameNotification--
+public class EsameNotification{
+   public void onNotify(@Observe Esame e){
+            System.out.println("Finalmente!");
+   }
+}
+########################################################
+Risposta c) Client
+
+-EsameWebServiceClient--
+public class EsamiStdClient {
+   public static void main(String[] args){
+      System.out.println("Studenti che si sono registrati all'esame: ");
+      this.stampaStudentiRegistrati();
+   }
+
+   private void stampaStudentiRegistrati(){
+      EsameEJBService service = new EsameEJBService();
+      EsameEJB ejb = service.getEsameEJBPort();
+      List<Esame> studentiRegistrati = ejb.cercaTutto();
+      for(Esame e: studentiRegistrati)
+         System.out.println(e);
+   }
+}
